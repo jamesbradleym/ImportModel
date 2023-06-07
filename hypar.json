@@ -1,0 +1,68 @@
+{
+  "$schema": "https://hypar.io/Schemas/Function.json",
+  "id": "97c115eb-7f07-43fc-a489-781dafbd4bae",
+  "name": "Import Model",
+  "description": "The ImportModel function.",
+  "language": "C#",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "Models": {
+        "type": "array",
+        "description": "Import models.",
+        "items": {
+          "type": "object",
+          "$hyparStyle": "row",
+          "properties": {
+            "File": {
+              "$ref": "https://hypar.io/Schemas/InputData.json",
+              "$hyparFileTypes": [
+                "json",
+                "3dm",
+                "obj",
+                "fbx"
+              ]
+            }
+          },
+          "$hyparDisplayName": "Models"
+        }
+      },
+      "ShowEdges": {
+        "type": "boolean"
+      }
+    }
+  },
+  "overrides": {
+    "Transforms": {
+      "context": "[*discriminator=Elements.MeshElement]",
+      "identity": {
+        "OriginalLocation": {
+          "$ref": "https://hypar.io/Schemas/Geometry/Vector3.json"
+        },
+        "gltfLocation": {
+          "type": "string"
+        },
+        "Name": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "paradigm": "edit",
+      "schema": {
+        "Transform": {
+          "$ref": "https://prod-api.hypar.io/schemas/Transform"
+        }
+      },
+      "verbs": {
+        "edit": null,
+        "revert": null
+      }
+    }
+  },
+  "outputs": [],
+  "repository_url": "https://github.com/hypar-io/function",
+  "last_updated": "0001-01-01T00:00:00",
+  "cli_version": "1.7.0-alpha.14"
+}
