@@ -473,9 +473,7 @@ namespace ImportModel
             // Checks if overrides and Transforms within the overrides exist.
             if (overrides != null && overrides.Transforms != null)
             {
-                // Initializes a new dictionary to store location overrides.
-                // var transformOverrides = new Dictionary<Vector3, dynamic>();
-                // var dTransformOverrides = new Dictionary<string, dynamic>();
+                // Initializes a new dictionary to store transform overrides.
                 var transformOverridesWithNames = new Dictionary<string, dynamic>();
                 var transformOverridesWithoutNames = new Dictionary<Vector3, dynamic>();
 
@@ -495,12 +493,8 @@ namespace ImportModel
 
                 foreach (var e in allMeshElements)
                 {
-                    // Checks if the element instance's original location exists in the location overrides.
+                    // Checks if the element instance's original location and name exists in the transform overrides.
                     // If it does not exist, the function continues to the next element instance.
-                    // if (!transformOverrides.TryGetValue(e.Transform.Origin, out var transformOverride))
-                    // {
-                    //     continue;
-                    // }
                     transformOverridesWithNames.TryGetValue(e.Name + e.Transform.Origin.ToString(), out var transformOverride);
 
                     if (transformOverride == null)
