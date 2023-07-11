@@ -34,7 +34,7 @@
   },
   "overrides": {
     "Transforms": {
-      "context": "[*discriminator=Elements.MeshElement]",
+      "context": "[*discriminator=Elements.Jelly]",
       "identity": {
         "OriginalLocation": {
           "$ref": "https://hypar.io/Schemas/Geometry/Vector3.json"

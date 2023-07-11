@@ -12,7 +12,7 @@ namespace ImportModel
 	{
         public static string Name = "Transforms";
         public static string Dependency = null;
-        public static string Context = "[*discriminator=Elements.MeshElement]";
+        public static string Context = "[*discriminator=Elements.Jelly]";
 		public static string Paradigm = "Edit";
 
         /// <summary>

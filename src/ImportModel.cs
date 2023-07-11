@@ -4,9 +4,11 @@ using System.Collections.Generic;
 using Elements;
 using Elements.Geometry;
 using System.IO;
+using System.Reflection;
 
 namespace ImportModel
 {
+
     public static class ImportModel
     {
         /// <summary>
@@ -20,6 +22,9 @@ namespace ImportModel
             var model = new Model();
             var warnings = new List<string>();
 
+            // var keyValueString = string.Join(", ", input.SignedResourceUrls.InputData.Select(kvp => $"{kvp.Key}: {kvp.Value}"));
+            // warnings.Add($"Dictionary: {keyValueString}");
+            // warnings.Add("LocalFilePath: " + input.Single.LocalFilePath + ", Key: " + input.Single.Key);
             // Read and convert supported file types
             foreach (var inputFile in input.Models.Where(obj => obj.File != null).Select(obj => obj.File).ToList())
             {
@@ -34,7 +39,8 @@ namespace ImportModel
 
                     if (!File.Exists(filePath))
                     {
-                        return null;
+                        warnings.Add("LocalFilePath: " + inputFile.LocalFilePath + ", Key: " + inputFile.Key + ", Does not exist.");
+                        continue;
                     }
                 }
 
@@ -49,7 +55,7 @@ namespace ImportModel
                             break;
 
                         case ".obj":
-                            var objModels = ReadObjFile(filePath, input.ShowEdges);
+                            var objModels = ReadObjFile(filePath, true);
                             model.AddElements(objModels);
                             break;
 
@@ -79,15 +85,15 @@ namespace ImportModel
             var output = new ImportModelOutputs();
             output.Model = model;
             TransformOverrides(input.Overrides, output.Model);
-            if (input.ShowEdges)
-            {
-                output.Model.AddElements(ExtractUniqueEdges(output.Model));
-            }
+            // if (input.ShowEdges)
+            // {
+            //     output.Model.AddElements(ExtractUniqueEdges(output.Model));
+            // }
             output.Warnings.AddRange(warnings);
             return output;
         }
 
-        private static string[] ReadAllLinesFromFile(string filePath)
+        private static string[]? ReadAllLinesFromFile(string filePath)
         {
             string[] flines;
             using (FileStream fs = new FileStream(filePath, FileMode.Open))
@@ -102,8 +108,10 @@ namespace ImportModel
 
             return flines;
         }
-        private static Element ReadObjFile(string filePath, bool showEdges)
+        private static List<Jelly>? ReadObjFile(string filePath, bool disjointMesh)
         {
+            var jellies = new List<Jelly>();
+
             var flines = ReadAllLinesFromFile(filePath);
 
             if (flines == null)
@@ -116,12 +124,55 @@ namespace ImportModel
             var textureCoordinates = new List<UV>();
             var faceIndices = new List<int>();
             var triangles = new List<Triangle>();
+            var currentMeshName = string.Empty;
+            var identifierSet = new List<string>();
+            var shouldConfirm = false;
 
             foreach (var line in flines)
             {
                 var elements = line.Split(' ');
 
-                if (elements[0] == "v")
+                if (elements.Length == 0)
+                {
+                    continue;
+                }
+                else if (elements[0] == "")
+                {
+                    shouldConfirm = true;
+                }
+
+                var identifier = elements[0];
+
+                if (disjointMesh && shouldConfirm && identifierSet.Contains(identifier))
+                {
+                    // Group or Object name (new distinct mesh)
+                    if (triangles.Count > 0)
+                    {
+                        List<Vertex> verticesCulled = triangles.SelectMany(t => t.Vertices).Distinct().ToList();
+                        // List<Triangle> trianglesCopy = new List<Triangle>(triangles.Select(t => new Triangle(t.Vertices[0], t.Vertices[1], t.Vertices[2])));
+
+                        var mesh = new Elements.Geometry.Mesh(verticesCulled, triangles);
+
+                        var jelly = new Jelly($"{Path.GetFileNameWithoutExtension(filePath)}-{currentMeshName}", mesh);
+                        jellies.Add(jelly);
+
+                        // Clear current mesh data
+                        triangles.Clear();
+                        currentMeshName = string.Empty;
+                        identifierSet.Clear();
+                    }
+                }
+                else
+                {
+                    shouldConfirm = false;
+                }
+
+                if (!identifierSet.Contains(identifier))
+                {
+                    identifierSet.Add(identifier);
+                }
+
+                if (identifier == "v")
                 {
                     // Vertex position
                     var x = double.Parse(elements[1]);
@@ -130,7 +181,7 @@ namespace ImportModel
                     var position = new Vector3(x, y, z);
                     vertices.Add(new Vertex(position));
                 }
-                else if (elements[0] == "vn")
+                else if (identifier == "vn")
                 {
                     // Vertex normal
                     var nx = double.Parse(elements[1]);
@@ -139,7 +190,7 @@ namespace ImportModel
                     var normal = new Vector3(nx, ny, nz);
                     vertexNormals.Add(normal);
                 }
-                else if (elements[0] == "vt")
+                else if (identifier == "vt")
                 {
                     // Texture coordinates
                     var u = double.Parse(elements[1]);
@@ -147,7 +198,7 @@ namespace ImportModel
                     var uv = new UV(u, v);
                     textureCoordinates.Add(uv);
                 }
-                else if (elements[0] == "f")
+                else if (identifier == "f")
                 {
                     // Face indices
                     for (var i = 1; i < elements.Length; i++)
@@ -192,20 +243,19 @@ namespace ImportModel
 
                     faceIndices.Clear();
                 }
+                else if (identifier == "g" || identifier == "o")
+                {
+                    currentMeshName = string.Join(" ", elements.Skip(1));
+                }
             }
-
-            var materialName = Path.GetFileNameWithoutExtension(filePath) + "_MAT";
-            var materialColor = new Color(0.952941176, 0.360784314, 0.419607843, 1.0); // F15C6B with alpha 1
-            var material = new Material(materialName);
-            material.Color = materialColor;
-            material.Unlit = true;
-
-            var mesh = new Elements.Geometry.Mesh(vertices, triangles);
-            var meshElement = new MeshElement(mesh);
-            meshElement.Material = material;
-            meshElement.Name = Path.GetFileNameWithoutExtension(filePath);
-
-            return meshElement;
+            // Process the last mesh object
+            if (triangles.Count > 0)
+            {
+                var mesh = new Elements.Geometry.Mesh(vertices, triangles);
+                var jelly = new Jelly($"{Path.GetFileNameWithoutExtension(filePath)}-{currentMeshName}", mesh);
+                jellies.Add(jelly);
+            }
+            return jellies;
         }
         private static List<Element> ReadJSONFile(string filePath)
         {
@@ -457,19 +507,13 @@ namespace ImportModel
         public static void TransformOverrides(dynamic overrides, Model model)
         {
             // Retrieves all instances of elements in the model and converts them into a list.
-            var allMeshElements = model.AllElementsOfType<MeshElement>().ToList();
+            var allJellyElements = model.AllElementsOfType<Jelly>().ToList();
             // Checks if there are any element instances in the model.
-            if (!allMeshElements.Any())
+            if (!allJellyElements.Any())
             {
                 return;
             }
 
-            foreach (var e in allMeshElements)
-            {
-                // Adds the original location of the element instance to its AdditionalProperties dictionary.
-                e.AdditionalProperties["OriginalLocation"] = e.Transform.Origin;
-                e.AdditionalProperties["Name"] = e.Name;
-            }
             // Checks if overrides and Transforms within the overrides exist.
             if (overrides != null && overrides.Transforms != null)
             {
@@ -491,7 +535,7 @@ namespace ImportModel
                     }
                 }
 
-                foreach (var e in allMeshElements)
+                foreach (var e in allJellyElements)
                 {
                     // Checks if the element instance's original location and name exists in the transform overrides.
                     // If it does not exist, the function continues to the next element instance.
@@ -508,7 +552,8 @@ namespace ImportModel
                     try
                     {
                         // Updates the element instance's transform matrix with the override's transform matrix.
-                        e.Transform.Matrix = transformOverride.Value.Transform.Matrix;
+                        // e.Transform.Matrix = transformOverride.Value.Transform.Matrix;
+                        e.UpdateTransform(transformOverride.Value.Transform.Matrix);
                         // Adds the override identity to the element instance.
                         Identity.AddOverrideIdentity(e, transformOverride);
                     }

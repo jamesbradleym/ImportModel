@@ -61,11 +61,18 @@ namespace ImportModel
             Console.WriteLine($"Time to load assemblies: {sw.Elapsed.TotalSeconds})");
 
             if(this.store == null)
-            {
-                this.store = new S3ModelStore<ImportModelInputs>(RegionEndpoint.GetBySystemName("us-west-1"));
+            { 
+                if (args.SignedResourceUrls == null)
+                {
+                    this.store = new S3ModelStore<ImportModelInputs>(RegionEndpoint.GetBySystemName("us-west-1"));
+                }
+                else
+                {
+                    this.store = new UrlModelStore<ImportModelInputs>();
+                }
             }
 
-            var l = new InvocationWrapper<ImportModelInputs,ImportModelOutputs>(store, ImportModel.Execute);
+            var l = new InvocationWrapper<ImportModelInputs,ImportModelOutputs> (store, ImportModel.Execute);
             var output = await l.InvokeAsync(args);
             return output;
         }
