@@ -5,6 +5,9 @@ using Elements;
 using Elements.Geometry;
 using System.IO;
 using System.Reflection;
+using MeshIO.FBX;
+using MeshIO;
+using MeshIO.Entities.Geometries;
 
 namespace ImportModel
 {
@@ -26,13 +29,18 @@ namespace ImportModel
             // warnings.Add($"Dictionary: {keyValueString}");
             // warnings.Add("LocalFilePath: " + input.Single.LocalFilePath + ", Key: " + input.Single.Key);
             // Read and convert supported file types
-            foreach (var inputFile in input.Models.Where(obj => obj.File != null).Select(obj => obj.File).ToList())
+            foreach (var modelInput in input.Models.Where(obj => obj.File != null).ToList())
             {
-                // var inputFile = input.Model;
+                var inputFile = modelInput.File;
                 var filePath = inputFile.LocalFilePath;
 
                 if (!File.Exists(filePath))
                 {
+                    if (inputFile.Key == null)
+                    {
+                        warnings.Add("LocalFilePath: " + inputFile.LocalFilePath + ", Key: " + inputFile.Key + ", Does not exist.");
+                        continue;
+                    }
                     // string folderPath = Path.Combine(AppContext.BaseDirectory, "Models");
                     string folderPath = "/Users/jamesbradleym/Dropbox (Personal)/Programming/Hypar/ImportModel/Models";
                     filePath = Path.Combine(folderPath, Path.GetFileName(inputFile.Key));
@@ -55,7 +63,7 @@ namespace ImportModel
                             break;
 
                         case ".obj":
-                            var objModels = ReadObjFile(filePath, true);
+                            var objModels = ReadObjFile(filePath, modelInput.Disjoint);
                             model.AddElements(objModels);
                             break;
 
@@ -65,7 +73,7 @@ namespace ImportModel
                             break;
 
                         case ".json":
-                            var jsonModels = ReadJSONFile(filePath);
+                            var jsonModels = ReadJSONFile(filePath, modelInput.Disjoint);
                             model.AddElements(jsonModels);
                             break;
 
@@ -108,7 +116,7 @@ namespace ImportModel
 
             return flines;
         }
-        private static List<Jelly>? ReadObjFile(string filePath, bool disjointMesh)
+        private static List<Jelly>? ReadObjFile(string filePath, bool disjoint)
         {
             var jellies = new List<Jelly>();
 
@@ -123,7 +131,7 @@ namespace ImportModel
             var vertexNormals = new List<Vector3>();
             var textureCoordinates = new List<UV>();
             var faceIndices = new List<int>();
-            var triangles = new List<Triangle>();
+            var triangles = new List<Elements.Geometry.Triangle>();
             var currentMeshName = string.Empty;
             var identifierSet = new List<string>();
             var shouldConfirm = false;
@@ -143,16 +151,13 @@ namespace ImportModel
 
                 var identifier = elements[0];
 
-                if (disjointMesh && shouldConfirm && identifierSet.Contains(identifier))
+                if (disjoint && shouldConfirm && identifierSet.Contains(identifier))
                 {
                     // Group or Object name (new distinct mesh)
                     if (triangles.Count > 0)
                     {
                         List<Vertex> verticesCulled = triangles.SelectMany(t => t.Vertices).Distinct().ToList();
-                        // List<Triangle> trianglesCopy = new List<Triangle>(triangles.Select(t => new Triangle(t.Vertices[0], t.Vertices[1], t.Vertices[2])));
-
                         var mesh = new Elements.Geometry.Mesh(verticesCulled, triangles);
-
                         var jelly = new Jelly($"{Path.GetFileNameWithoutExtension(filePath)}-{currentMeshName}", mesh);
                         jellies.Add(jelly);
 
@@ -204,11 +209,19 @@ namespace ImportModel
                     for (var i = 1; i < elements.Length; i++)
                     {
                         var vertexData = elements[i].Split('/');
-                        var vertexIndex = int.Parse(vertexData[0]) - 1; // Obj indices are 1-based, so we subtract 1
-                        var textureIndex = int.Parse(vertexData[1]) - 1; // Obj indices are 1-based, so we subtract 1
-                        var normalIndex = int.Parse(vertexData[2]) - 1; // Obj indices are 1-based, so we subtract 1
+
+                        var vertexIndex = int.TryParse(vertexData[0], out var vi) ? vi - 1 : 0;
+                        var textureIndex = int.TryParse(vertexData[1], out var ti) ? ti - 1 : 0;
+                        var normalIndex = int.TryParse(vertexData[2], out var ni) ? ni - 1 : 0;
+
                         var vertex = vertices[vertexIndex];
-                        var normal = vertexNormals[normalIndex];
+
+                        var normal = Vector3.Origin;
+                        if (vertexNormals.Count > 0)
+                        {
+                            normal = normalIndex < vertexNormals.Count ? vertexNormals[normalIndex] : Vector3.Origin;
+                        }
+
                         var uv = textureCoordinates[textureIndex];
 
                         // Assign normal and texture coordinate to vertex
@@ -228,7 +241,7 @@ namespace ImportModel
                         // Create triangles for the face
                         for (var i = 0; i < faceIndices.Count - 2; i++)
                         {
-                            var triangle = new Triangle(v1, v2, v3);
+                            var triangle = new Elements.Geometry.Triangle(v1, v2, v3);
                             triangles.Add(triangle);
 
                             // Move to the next vertices
@@ -248,6 +261,7 @@ namespace ImportModel
                     currentMeshName = string.Join(" ", elements.Skip(1));
                 }
             }
+
             // Process the last mesh object
             if (triangles.Count > 0)
             {
@@ -255,10 +269,13 @@ namespace ImportModel
                 var jelly = new Jelly($"{Path.GetFileNameWithoutExtension(filePath)}-{currentMeshName}", mesh);
                 jellies.Add(jelly);
             }
+
             return jellies;
         }
-        private static List<Element> ReadJSONFile(string filePath)
+
+        private static List<Element>? ReadJSONFile(string filePath, bool disjoint)
         {
+            var ellies = new List<Element>();
             var flines = ReadAllLinesFromFile(filePath);
 
             if (flines == null)
@@ -269,10 +286,28 @@ namespace ImportModel
             // Implement the logic to read and convert .json files
             var models = Model.FromJson(File.ReadAllText(filePath)).Elements.Values.ToList();
 
-            return models;
+            foreach (var elly in models)
+            {
+                switch (elly)
+                {
+                    case Jelly jelly:
+                        ellies.Add(jelly);
+                        break;
+                    case MeshElement meshy:
+                        var meshjelly = new Jelly($"{Path.GetFileNameWithoutExtension(filePath)}-{meshy.Name}", meshy.Mesh);
+                        ellies.Add(meshjelly);
+                        break;
+                    default:
+                        ellies.Add(elly);
+                        break;
+                }
+            }
+            return ellies;
         }
-        private static List<Element> ReadFbxFile(string filePath)
+        private static List<Jelly>? ReadFbxFile(string filePath)
         {
+            var jellies = new List<Jelly>();
+
             var flines = ReadAllLinesFromFile(filePath);
 
             if (flines == null)
@@ -281,12 +316,55 @@ namespace ImportModel
             }
 
             // Implement the logic to read and convert .fbx files
-            var models = new List<Element>();
+            using (FbxReader reader = new FbxReader(filePath, ErrorLevel.Checked))
+            {
+                // reader.OnNotification += NotificationHelper.LogConsoleNotification;
+                Scene scene = reader.Read();
+                //Iterate throgh all the nodes in the scene
+                foreach (Element3D item in scene.RootNode.Nodes)
+                {
+                    //Check if the element is a geometric type
+                    if (item is Geometry geometry)
+                    {
+                        // jellies.Add(geometry);
+                    }
 
-            // ...
+                    if (item is Node node)
+                    {
+                        // Each node can contain geometric elements, so you need to look in the elements contained in the main node
+                        foreach (Element3D c in node.Nodes)
+                        {
+                            if (c is MeshIO.Entities.Geometries.Mesh m)
+                            {
+                                List<Vertex> vertices = m.Vertices.Select(xyz => new Vertex(new Vector3(xyz.X, xyz.Y, xyz.Z))).ToList();
+                                List<Elements.Geometry.Triangle> triangles = new List<Elements.Geometry.Triangle>();
 
-            return models;
+                                foreach (var p in m.Polygons)
+                                {
+                                    // Assuming p is a collection of integers representing indices
+                                    int[] polygonVertices = p.ToArray();
+                                    if (polygonVertices.Length > 3)
+                                    {
+                                        triangles.AddRange(Triangulator.Triangulate(new List<Vertex>() { vertices[polygonVertices[0]], vertices[polygonVertices[1]], vertices[polygonVertices[2]], vertices[polygonVertices[3]] }));
+                                    }
+                                    else if (polygonVertices.Length == 3)
+                                    {
+                                        triangles.Add(new Elements.Geometry.Triangle(vertices[polygonVertices[0]], vertices[polygonVertices[1]], vertices[polygonVertices[2]]));
+                                    }
+                                }
+
+                                var mesh = new Elements.Geometry.Mesh(vertices, triangles);
+                                jellies.Add(new Jelly(item.Name, mesh));
+                            }
+                        }
+                    }
+
+                }
+            }
+
+            return jellies;
         }
+
         private static List<Element> ReadRhinoFile(string filePath)
         {
             if (!File.Exists(filePath))
@@ -327,7 +405,7 @@ namespace ImportModel
             else if (rhinoGeometry is Rhino.Geometry.Mesh rhinoMesh)
             {
                 var vertices = new List<Vertex>();
-                var triangles = new List<Triangle>();
+                var triangles = new List<Elements.Geometry.Triangle>();
 
                 foreach (var vertex in rhinoMesh.Vertices)
                 {
@@ -338,15 +416,15 @@ namespace ImportModel
                 {
                     if (face.IsQuad)
                     {
-                        var triangleA = new Triangle(vertices[face.A], vertices[face.B], vertices[face.C]);
-                        var triangleB = new Triangle(vertices[face.C], vertices[face.D], vertices[face.A]);
+                        var triangleA = new Elements.Geometry.Triangle(vertices[face.A], vertices[face.B], vertices[face.C]);
+                        var triangleB = new Elements.Geometry.Triangle(vertices[face.C], vertices[face.D], vertices[face.A]);
 
                         triangles.Add(triangleA);
                         triangles.Add(triangleB);
                     }
                     else
                     {
-                        var triangle = new Triangle(vertices[face.A], vertices[face.B], vertices[face.C]);
+                        var triangle = new Elements.Geometry.Triangle(vertices[face.A], vertices[face.B], vertices[face.C]);
                         triangles.Add(triangle);
                     }
                 }
@@ -354,8 +432,8 @@ namespace ImportModel
                 var mesh = new Elements.Geometry.Mesh(vertices, triangles);
 
                 var materialName = Path.GetFileNameWithoutExtension("Example");
-                var materialColor = new Color(0.952941176, 0.360784314, 0.419607843, 1.0); // F15C6B with alpha 1
-                var material = new Material(materialName);
+                var materialColor = new Elements.Geometry.Color(0.952941176, 0.360784314, 0.419607843, 1.0); // F15C6B with alpha 1
+                var material = new Elements.Material(materialName);
                 material.Color = materialColor;
                 material.Unlit = true;
 
@@ -374,78 +452,7 @@ namespace ImportModel
 
             return null; // Unsupported geometry type
         }
-        private static List<Triangle> TriangulatePolygon(List<Vertex> vertices, List<int> faceIndices)
-        {
-            var triangles = new List<Triangle>();
-
-            // Apply ear clipping algorithm to triangulate the polygon
-            var remainingVertices = faceIndices.Select(i => vertices[i]).ToList();
-
-            while (remainingVertices.Count >= 3)
-            {
-                // Find an ear vertex
-                var earVertexIndex = FindEarVertexIndex(remainingVertices);
-
-                if (earVertexIndex != -1)
-                {
-                    // Create triangle from the ear vertex and its adjacent vertices
-                    var v1 = remainingVertices[earVertexIndex];
-                    var v2 = remainingVertices[(earVertexIndex + 1) % remainingVertices.Count];
-                    var v3 = remainingVertices[(earVertexIndex + 2) % remainingVertices.Count];
-
-                    var triangle = new Triangle(v1, v2, v3);
-                    triangles.Add(triangle);
-
-                    // Remove the ear vertex from the remaining vertices
-                    remainingVertices.RemoveAt((earVertexIndex + 1) % remainingVertices.Count);
-                }
-                else
-                {
-                    // No ear vertex found, break the loop
-                    break;
-                }
-            }
-
-            return triangles;
-        }
-        private static int FindEarVertexIndex(List<Vertex> vertices)
-        {
-            var vertexCount = vertices.Count;
-
-            for (var i = 0; i < vertexCount; i++)
-            {
-                var v0 = vertices[(i - 1 + vertexCount) % vertexCount];
-                var v1 = vertices[i];
-                var v2 = vertices[(i + 1) % vertexCount];
-
-                if (IsEarVertex(v0, v1, v2, vertices))
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
-        private static bool IsEarVertex(Vertex v0, Vertex v1, Vertex v2, List<Vertex> vertices)
-        {
-            var trianglePoly = new Polygon(v0.Position, v1.Position, v2.Position);
-
-            foreach (var vertex in vertices)
-            {
-                if (vertex == v0 || vertex == v1 || vertex == v2)
-                {
-                    continue;
-                }
-
-                if (trianglePoly.Covers(vertex.Position))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-        private static Elements.Geometry.Mesh CreateMeshFromVerticesAndFaces(List<Vertex> vertices, List<Triangle> triangles)
+        private static Elements.Geometry.Mesh CreateMeshFromVerticesAndFaces(List<Vertex> vertices, List<Elements.Geometry.Triangle> triangles)
         {
             var mesh = new Elements.Geometry.Mesh();
 

@@ -29,17 +29,16 @@ namespace ImportModel
     {
         [Newtonsoft.Json.JsonConstructor]
         
-        public ImportModelInputs(IList<Models> @models, bool @showEdges, Overrides @overrides, string bucketName, string uploadsBucket, Dictionary<string, string> modelInputKeys, string gltfKey, string elementsKey, string ifcKey):
+        public ImportModelInputs(IList<Models> @models, Overrides @overrides, string bucketName, string uploadsBucket, Dictionary<string, string> modelInputKeys, string gltfKey, string elementsKey, string ifcKey):
         base(bucketName, uploadsBucket, modelInputKeys, gltfKey, elementsKey, ifcKey)
         {
             var validator = Validator.Instance.GetFirstValidatorForType<ImportModelInputs>();
             if(validator != null)
             {
-                validator.PreConstruct(new object[]{ @models, @showEdges, @overrides});
+                validator.PreConstruct(new object[]{ @models, @overrides});
             }
         
             this.Models = @models;
-            this.ShowEdges = @showEdges;
             this.Overrides = @overrides ?? this.Overrides;
         
             if(validator != null)
@@ -52,9 +51,6 @@ namespace ImportModel
         [Newtonsoft.Json.JsonProperty("Models", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public IList<Models> Models { get; set; }
     
-        [Newtonsoft.Json.JsonProperty("ShowEdges", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
-        public bool ShowEdges { get; set; }
-    
         [Newtonsoft.Json.JsonProperty("overrides", Required = Newtonsoft.Json.Required.Default, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public Overrides Overrides { get; set; } = new Overrides();
     
@@ -66,15 +62,16 @@ namespace ImportModel
     
     {
         [Newtonsoft.Json.JsonConstructor]
-        public Models(InputData @file)
+        public Models(InputData @file, bool @disjoint)
         {
             var validator = Validator.Instance.GetFirstValidatorForType<Models>();
             if(validator != null)
             {
-                validator.PreConstruct(new object[]{ @file});
+                validator.PreConstruct(new object[]{ @file, @disjoint});
             }
         
             this.File = @file;
+            this.Disjoint = @disjoint;
         
             if(validator != null)
             {
@@ -84,6 +81,9 @@ namespace ImportModel
     
         [Newtonsoft.Json.JsonProperty("File", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
         public InputData File { get; set; }
+    
+        [Newtonsoft.Json.JsonProperty("Disjoint", Required = Newtonsoft.Json.Required.DisallowNull, NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+        public bool Disjoint { get; set; }
     
         private System.Collections.Generic.IDictionary<string, object> _additionalProperties = new System.Collections.Generic.Dictionary<string, object>();
     

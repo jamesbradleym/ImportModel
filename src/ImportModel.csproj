@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="Rhino3dmIO.Desktop" Version="7.1.20343.9491" />
+    <PackageReference Include="MeshIO" Version="2.0.0-alpha" />
+    <PackageReference Include="MeshIO.FBX" Version="2.0.0-alpha" />
   </ItemGroup>
 
   <PropertyGroup>

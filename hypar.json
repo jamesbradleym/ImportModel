@@ -21,14 +21,16 @@
                 "3dm",
                 "obj",
                 "fbx"
-              ]
+              ],
+              "$hyparOrder": 0
+            },
+            "Disjoint": {
+              "type": "boolean",
+              "$hyparOrder": 1
             }
           },
           "$hyparDisplayName": "Models"
         }
-      },
-      "ShowEdges": {
-        "type": "boolean"
       }
     }
   },

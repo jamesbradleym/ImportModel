@@ -7,7 +7,6 @@ The ImportModel function.
 |Input Name|Type|Description|
 |---|---|---|
 |Models|array|Import models.|
-|ShowEdges|boolean||
 
 
 <br>

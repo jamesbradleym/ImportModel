@@ -13,12 +13,15 @@ namespace Elements
             get { return _baseMesh; }
             set
             {
-                _baseMesh = value;
-                UpdateBoundsAndComputeSolid();
-                Volume = value.Volume();
-                BoundingBox = value.BoundingBox;
-                CenterTransform();
-                UpdateRepresentations();
+                if (value != null)
+                {
+                    _baseMesh = value;
+                    UpdateBoundsAndComputeSolid();
+                    Volume = value.Volume();
+                    BoundingBox = value.BoundingBox;
+                    CenterTransform();
+                    UpdateRepresentations();
+                }
             }
         }
         public BBox3 BoundingBox { get; set; }
@@ -59,7 +62,10 @@ namespace Elements
 
             foreach (var face in this.BaseMesh.Triangles)
             {
-                solidRep.AddFace(new Polygon(face.Vertices.Select(v => new Vector3(v.Position.X, v.Position.Y, v.Position.Z)).ToList()));
+                if (face.Normal != Vector3.Origin)
+                {
+                    solidRep.AddFace(new Polygon(face.Vertices.Select(v => new Vector3(v.Position.X, v.Position.Y, v.Position.Z)).ToList()));
+                }
             }
 
             // foreach (var edge in this.Edgework)
@@ -173,7 +179,6 @@ namespace Elements
             }
         }
     }
-
 
     public class UIdGenerator
     {
